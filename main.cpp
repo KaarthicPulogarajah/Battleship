@@ -1016,7 +1016,7 @@ int main()
                             totalPlayer = keepCountPlayer(CPU);
                         }
                     }
-        Sleep(500);
+        Sleep(100);
         //CPU's turn
 
         int r,c;
@@ -1085,7 +1085,7 @@ int main()
             if (game[r][c].length () == 1)
             {
                 cout << "\nHit!\n";
-                Sleep(500);
+                Sleep(100);
                 temp = game[r][c];
 
                 game[r][c] = " X";
@@ -1110,7 +1110,7 @@ int main()
             else
             {
                 cout << "\nMiss!\n";
-                Sleep(500);
+                Sleep(100);
                 game[r][c] = " O";
                 print(game);
 
@@ -1281,7 +1281,7 @@ int keepCountPlayer (string a[10][10])
     int total = countA+countB+countC+countD+countS;
     if (total == 0)
         cout << "\n\nYOU WIN!";
-    Sleep(1000);
+    Sleep(500);
     return total;
 }
 
@@ -1307,7 +1307,7 @@ int keepCountCpu (string a[10][10])
     int total = countA+countB+countC+countD+countS;
     if (total == 0)
         cout << "\n\nYOU LOSE!";
-    Sleep(1000);
+    Sleep(500);
     return total;
 }
 
