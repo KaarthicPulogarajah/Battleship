@@ -2,1312 +2,584 @@
 //Battleship
 #include <iostream>
 #include <conio.h>
-#include <string>
-#define _WIN32_WINNT 0x0500
+#include <sstream>
 #include <windows.h>
-#include <cstdlib>
-#include <time.h>
-#include <stdlib.h>
+#include <unordered_map>
+#include <algorithm>
+// #include <string>
+// #define _WIN32_WINNT 0x0500
+// #include <cstdlib>
+// #include <time.h>
+// #include <stdlib.h>
 using namespace std;
-int keepCountPlayer(string a[10][10]);
-int keepCountCpu(string a[10][10]);
-int countA (string a[10][10]);
-int countB (string a[10][10]);
-int countC (string a[10][10]);
-int countD (string a[10][10]);
-int countS (string a[10][10]);
-string guess (string player[10][10], string a[10][10]);
-void ScreenSize ()
-{
-HWND console = GetConsoleWindow();
-  RECT r;
-  GetWindowRect(console, &r); //stores the console's current dimensions
 
-  //MoveWindow(window_handle, x, y, width, height, redraw_window);
-  MoveWindow(console, r.left, r.top, 800, 600, TRUE);
-}
-static HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-void print (string a[10][10])
+class Ship {
+	protected:
+		int spaces, numHit;
+		string name, letter;
+		string startCoor;
+		bool sunk;
+	public:
+		Ship (int spaces, string name){
+			this-> spaces = spaces;
+			this-> name = name;
+			letter = name[0];
+			sunk = false;
+			numHit = 0;
+		}
+
+		int getSpaces(){return spaces;}
+		string getName(){return name;}
+		string getLetter(){return letter;}
+		void sink(){sunk = true;}
+		bool isSunk(){return sunk;}
+		void hit(int numHit){this -> numHit = numHit;}
+		int getHits(){return numHit;}
+		
+		virtual void setStart(string startCoor){};
+		virtual void setStart(int i , int j){};	
+		
+};
+
+class PlayerShip : public Ship
 {
+	private:
+		string startCoor;
+	public:
+		PlayerShip (int spaces, string name): Ship(spaces, name){}
+		void setStart (string startCoor){this -> startCoor = startCoor;}
+		string getstartCoor(){return startCoor;}
+};
+
+class CpuShip : public Ship
+{
+	private:
+		int startCoor[2];
+	public:
+		CpuShip (int spaces, string name): Ship(spaces, name){}
+		void setStart(int i, int j){
+			this -> startCoor[0] = i;
+			this -> startCoor[1] = j;
+		}
+		int * getstartCoor(){return startCoor;}
+};
+
+static HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+void ScreenSize ();
+void print (string grid[10][10]);
+void restore (string grid[10][10]);
+string getCoor();
+string guess (string player[10][10], string grid[10][10]);
+bool check (string grid[10][10], string x);
+void randomCoor(string grid[10][10], int &r, int &c);
+void count(string grid[10][10], Ship * ShipToCount);
+int winCondition(string grid[10][10], int person);
+
+int main()
+{
+	char replay;
+	
+	do{
+		system("cls");
+		ScreenSize();
+		SetConsoleTitle("Battleship");
+
+		PlayerShip AircraftCarrier(5,"Aircraft Carrier");
+		PlayerShip Battleship(4,"Battleship");
+		PlayerShip Submarine(3,"Submarine");
+		PlayerShip Cruiser(3,"Cruiser");
+		PlayerShip Destroyer(2,"Destroyer");
+		PlayerShip ShipListPlayer[5] = {AircraftCarrier, Battleship, Submarine, Cruiser, Destroyer};
+
+		//map spaces to coordinate
+		unordered_map<string, string> gameMap;
+		for (int i = 0 ; i < 10 ; i++){
+			for (int j = 0 ; j < 10 ; j++){	
+				char lett = i+65;
+				string letter(1,lett);
+				gameMap.insert({letter+to_string(j+1), to_string(i)+to_string(j)});		
+			}
+		}
+		
+		string game[10][10];
+		string player[10][10];
+		
+		restore(game);
+		restore(player);
+		
+		string startCoor;
+		char orientation, redo = 'R';
+		bool occupied = false;
+
+		cout << "YOU ARE PLAYING BATTLESHIP\n\nYou have 5 ships:\nAircraftCarrier\t 5 spaces\nBattleship\t "<<
+		"4 spaces\nSubmarine\t 3 spaces\nCruiser\t\t 3 spaces\nDestroyer\t 2 spaces\n\n\n";
+	// goto cpugo;
+
+		// player input to place ships
+		do 
+		{
+			int i,j;
+			restore(game);
+			print(game);
+			
+			for (int q = 0 ; q < 5 ; q++)
+			{
+				cout << "\n\nWhere will you place the ";
+				cout << ShipListPlayer[q].getName() << "? " << ShipListPlayer[q].getSpaces()<<" spaces \nEnter starting coordinate: ";
+				
+				// loop until valid placement is chosen
+				do{
+
+					if (occupied)
+					{
+						cout << "\nNot enough space";
+						cout << "\nEnter starting coordinate: ";
+					}
+					// cin >> startCoor;
+					startCoor = getCoor();
+
+					while (!check(game, startCoor))
+					{
+						cout << "\nIncorrect coordinate, try again: ";
+						// cin >> startCoor;
+						startCoor = getCoor();
+					}
+					
+					do
+					{
+						cout << "\nPlace horizontally or vertically? Enter V/H: ";
+						cin >> orientation;
+					}
+					while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v');
+					
+					i = gameMap.at(startCoor)[0] -'0';
+					j = gameMap.at(startCoor)[1] -'0';
+					occupied = false;
+					
+					//check if other ships or board edge is in the way
+					if (orientation == 'h' || orientation == 'H')
+					{
+						for (int k = 0 ; k < ShipListPlayer[q].getSpaces() ; k++)
+						{   
+							if (j+ShipListPlayer[q].getSpaces()-1 > 9 && !occupied)
+								occupied = true;
+							else if (game[i][j+k].length () == 1) occupied = true;
+						}       
+					}
+
+					else if (orientation == 'v' || orientation == 'V')
+					{
+						for (int k = 0 ; k < ShipListPlayer[q].getSpaces() ; k++)
+						{
+							if (i+ShipListPlayer[q].getSpaces()-1 > 9 && !occupied)
+								occupied = true;
+							else if (game[i+k][j].length () == 1) occupied = true;
+						}
+					}
+				}
+				while (occupied);
+
+				// place ships if no problems encountered
+				if (orientation == 'h' || orientation == 'H')
+					for (int k = 0 ; k < ShipListPlayer[q].getSpaces() ; k++)
+						game[i][j+k] = ShipListPlayer[q].getLetter();
+				else if (orientation == 'v' || orientation == 'V')
+					for (int k = 0 ; k < ShipListPlayer[q].getSpaces() ; k++)
+						game[i+k][j] = ShipListPlayer[q].getLetter();
+
+				Ship *CurrentShip;
+				CurrentShip = &ShipListPlayer[q];
+				CurrentShip->setStart(startCoor); 
+				
+				print(game);
+			}
+			
+			cout << "\nIf you want to rearrange your ships, press 'r', or press any letter to continue\n";
+			cin >> redo;
+			
+		}
+		while (redo == 'r' || redo == 'R');
+		
+	cpugo:
+
+		// CPU ship placement
+		string CPU[10][10];
+		restore(CPU);
+		srand(time(NULL));
+		
+		cout << "\nCPU setting up ships...\n";
+		CpuShip AircraftCarrierCPU(5,"Aircraft Carrier");
+		CpuShip BattleshipCPU(4,"Battleship");
+		CpuShip SubmarineCPU(3,"Submarine");
+		CpuShip CruiserCPU(3,"Cruiser");
+		CpuShip DestroyerCPU(2,"Destroyer");
+		CpuShip ShipListCpu[5] = {AircraftCarrierCPU, BattleshipCPU, SubmarineCPU, CruiserCPU, DestroyerCPU};
+
+		int oriCPU,rowCPU, colCPU;
+		int *coor;
+		oriCPU = rand() % 2; // 0 is horizontal, 1 is vertical
+		
+		bool f, xyz;
+		for (int q = 0 ; q < 5 ; q++){
+			
+			// generate orientation for ship
+			oriCPU = rand() % 2;
+
+			if (oriCPU == 0)
+			{
+				do
+				{
+					randomCoor(CPU, rowCPU, colCPU);
+					f = true;
+					xyz = false;
+					
+					// make sure no other ships are in the way
+					for (int i = 0 ; i < ShipListCpu[q].getSpaces() ; i++)
+						if (CPU[rowCPU][colCPU+i].length () == 1)
+							f = false;
+					
+					// make sure ship stays in board
+					if (colCPU + ShipListCpu[q].getSpaces()-1 < 10 && f)
+					{
+						for (int j = 0 ; j < ShipListCpu[q].getSpaces() ; j++)
+							CPU[rowCPU][colCPU+j] = ShipListCpu[q].getLetter();
+					}
+					else
+						xyz = true;
+
+				}
+				while (colCPU + ShipListCpu[q].getSpaces()-1 > 9 || xyz);
+				
+			}
+			else if (oriCPU == 1)
+			{
+				do
+				{
+					randomCoor(CPU, rowCPU, colCPU);
+					f = true;
+					xyz = false;
+					
+					for (int i = 0 ; i < ShipListCpu[q].getSpaces() ; i++)
+						if (CPU[rowCPU+i][colCPU].length () == 1)
+							f = false;
+					
+					if (rowCPU + ShipListCpu[q].getSpaces()-1 < 10 && f)
+					{
+						for (int j = 0 ; j < ShipListCpu[q].getSpaces() ; j++)
+							CPU[rowCPU+j][colCPU] = ShipListCpu[q].getLetter();
+					}
+					else
+						xyz = true;
+				}
+				while (rowCPU + ShipListCpu[q].getSpaces()-1 > 9 || xyz);
+			}
+			
+			Ship * CurrentShip;
+			CurrentShip = &ShipListCpu[q];
+			CurrentShip->setStart(rowCPU,colCPU);
+
+			coor = ShipListCpu[q].getstartCoor();
+		} 
+		
+		//let the player make guesses
+		system("cls");
+		string playerGuess;
+		string temp = " ";
+		cout << "\t\t\t    LET THE GAME BEGIN\n\n";
+		print(player);
+		int totalPlayer,totalCPU, totA = 0, totB = 0, totC = 0, totD = 0, totS = 0;
+		int cpuA = 0, cpuB = 0, cpuC = 0, cpuD = 0, cpuS = 0;
+		bool heat = false;
+		
+		do
+		{
+			//player's turn
+			playerGuess = guess(player,CPU);
+			int i = gameMap.at(playerGuess)[0] -'0';
+			int j = gameMap.at(playerGuess)[1] -'0';
+			if (CPU[i][j].length () == 1)
+			{
+				cout << "\nHit!";
+				player[i][j] = " X";
+				CPU[i][j] = "X";
+				for (int q = 0 ; q < 5 ; q++)
+					count(CPU, &ShipListCpu[q]);
+			}
+			else
+			{
+				cout << "\nMiss!";
+				player[i][j] = " O";
+			}
+			totalPlayer = winCondition(CPU,1);
+			
+			Sleep(100);
+			
+			//CPU's turn
+			int r,c;
+			bool lock = false;
+			if (totalPlayer != 0)
+			{
+				cout <<"\nCPU's Target: ";
+				if (!heat)
+					randomCoor(game, r, c);
+				else
+				{
+					for (int i = 0 ; i < 10 ; i++)
+					{
+						for (int j = 0; j < 10 ; j++)
+						{
+							if (game[i][j] == temp && !lock)
+							{
+								r = i;
+								c = j;
+								lock = true;
+							}
+							else if (!lock)
+							{
+								randomCoor(game, r, c);
+								heat = false;
+							}
+						}
+					}
+				}
+				
+				// display CPU target
+				string value = to_string(r)+to_string(c);
+				auto it = find_if(gameMap.begin(), gameMap.end(),[&value](const pair<string, string> &p) {return p.second == value;});
+				cout << it -> first;
+				
+				Sleep(500);
+				if (game[r][c].length () == 1)
+				{
+					cout << "\nHit!";
+					temp = game[r][c];
+					game[r][c] = " X";
+					heat = true;
+					for (int q = 0 ; q < 5 ; q++)
+						count(game, &ShipListPlayer[q]);
+				}
+				else
+				{
+					cout << "\nMiss!";
+					game[r][c] = " O";
+				}
+				
+				Sleep(100);
+				cout << endl;
+				cout << endl;
+				print(game);
+				cout << endl;
+				totalCPU = winCondition(game,2);
+				if (totalCPU != 0)
+					system("pause");
+			}
+			
+			// continue game if both player and CPU have ships left
+			if (totalCPU != 0 && totalPlayer != 0)
+			{
+				system("cls");
+				print(player);
+			}
+		}
+		while (totalPlayer != 0 && totalCPU != 0);
+	
+		cout << "\n\nPress 'r' to play again, or press any letter to quit\n";
+		cin >> replay;
+	}
+	while(replay == 'r' || replay == 'R');
+	
+    return 0;
+}
+
+// set screen size
+void ScreenSize (){
+	HWND console = GetConsoleWindow();
+	RECT r;
+	GetWindowRect(console, &r); 
+	MoveWindow(console, r.left, 20, 700, 900, TRUE);
+}
+
+// print board with appropriate colour
+void print (string grid[10][10]){
     for (int i = 0 ; i < 10 ; i++)
     {
         for (int j = 0 ; j <10 ; j++)
         {
-            if (a[i][j] == "A")
+			string coor = grid[i][j];
+			
+            if (coor == "A")
             {
                 SetConsoleTextAttribute(h,11);
-                cout << a[i][j] << "\t";
+                cout << coor << "\t";
             }
-            else if (a[i][j] == " X")
+            else if (coor == " X")
             {
                 SetConsoleTextAttribute(h,12);
-                cout << a[i][j] << "\t";
+                cout << coor << "\t";
             }
-            else if (a[i][j] == "B")
+            else if (coor == "B")
             {
                 SetConsoleTextAttribute(h,9);
-                cout << a[i][j] << "\t";
+                cout << coor << "\t";
             }
-            else if (a[i][j] == "C")
+            else if (coor == "C")
             {
                 SetConsoleTextAttribute(h,14);
-                cout << a[i][j] << "\t";
+                cout << coor << "\t";
             }
-            else if (a[i][j] == "D")
+            else if (coor == "D")
             {
                 SetConsoleTextAttribute(h,10);
-                cout << a[i][j] << "\t";
+                cout << coor << "\t";
             }
-            else if (a[i][j] == "S")
+            else if (coor == "S")
             {
                 SetConsoleTextAttribute(h,13);
-                cout << a[i][j] << "\t";
+                cout << coor << "\t";
             }
-            else if (a[i][j] == " O")
+            else if (coor == " O")
             {
                 SetConsoleTextAttribute(h,15);
-                cout << a[i][j] << "\t";
+                cout << coor << "\t";
             }
             else
             {
                 SetConsoleTextAttribute(h,7);
-                cout << a[i][j] << "\t";
+                cout << coor << "\t";
             }
         }
-        cout << endl;
+        cout << endl << endl;;
     }
     SetConsoleTextAttribute(h,7);
 }
 
-int check (string a[10][10], string x);
-
-int main()
-{
-    ScreenSize();
-    SetConsoleTitle("Battleship");
-
-    string game[10][10] = {{"A1","A2","A3","A4","A5","A6","A7","A8","A9","A10"},
-    {"B1","B2","B3","B4","B5","B6","B7","B8","B9","B10"},
-    {"C1","C2","C3","C4","C5","C6","C7","C8","C9","C10"},
-    {"D1","D2","D3","D4","D5","D6","D7","D8","D9","D10"},
-    {"E1","E2","E3","E4","E5","E6","E7","E8","E9","E10"},
-    {"F1","F2","F3","F4","F5","F6","F7","F8","F9","F10"},
-    {"G1","G2","G3","G4","G5","G6","G7","G8","G9","G10"},
-    {"H1","H2","H3","H4","H5","H6","H7","H8","H9","H10"},
-    {"I1","I2","I3","I4","I5","I6","I7","I8","I9","I10"},
-    {"J1","J2","J3","J4","J5","J6","J7","J8","J9","J10"}};
-
-    string player [10][10] = game;
-    string startCoor;
-    char orientation, redo;
-    int occ = 0;
-
-    cout << "YOU ARE PLAYING BATTLESHIP\n\nYou have 5 ships:\nAircraftCarrier\t 5 spaces\nBattleship\t 4 spaces\nSubmarine\t 3 spaces\nCruiser\t\t 3 spaces\nDestroyer\t 2 spaces\n\n";
-
-    do
-    {
-        string game[10][10] =  {{"A1","A2","A3","A4","A5","A6","A7","A8","A9","A10"},
-                                {"B1","B2","B3","B4","B5","B6","B7","B8","B9","B10"},
-                                {"C1","C2","C3","C4","C5","C6","C7","C8","C9","C10"},
-                                {"D1","D2","D3","D4","D5","D6","D7","D8","D9","D10"},
-                                {"E1","E2","E3","E4","E5","E6","E7","E8","E9","E10"},
-                                {"F1","F2","F3","F4","F5","F6","F7","F8","F9","F10"},
-                                {"G1","G2","G3","G4","G5","G6","G7","G8","G9","G10"},
-                                {"H1","H2","H3","H4","H5","H6","H7","H8","H9","H10"},
-                                {"I1","I2","I3","I4","I5","I6","I7","I8","I9","I10"},
-                                {"J1","J2","J3","J4","J5","J6","J7","J8","J9","J10"}};
-        print(game);
-        cout <<"\n\nNote: Coordinates are case-sensitive\n\nWhere will you place the Aircraft Carrier? \nEnter starting coordinate: ";
-        cin >> startCoor;
-        while (check(game, startCoor) == -1)
-        {
-            cout << "\nIncorrect coordinate, try again: ";
-            cin >> startCoor;
-        }
-        cout << "Place horizontally or vertically? Enter v/h: ";
-        cin >> orientation;
-        while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v' )
-        {
-            cout << "Place horizontally or vertically? Enter v/h: ";
-            cin >> orientation;
-        }
-        int z;
-        z = 0;
-        do{
-            occ = 0;
-            if (orientation == 'h' || orientation == 'H')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 4 ; k++)
-                                if (j+3 > 9)
-                                {
-                                    occ++;
-                                    break;
-                                }
-                        }
-                    }
-                }
-            }
-
-            else if (orientation == 'v' || orientation == 'V')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 4 ; k++)
-                            {
-                                if (i+3 > 9)
-                                {
-                                    occ++;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if (occ > 0)
-            {
-                cout << "\nOut of Range, or path may be occupied";
-                cout << "\nEnter different starting coordinate:";
-                cin >> startCoor;
-                while (check(game, startCoor) == -1)
-                {
-                    cout << "\nIncorrect coordinate (or the space may be occupied), try again: ";
-                    cin >> startCoor;
-                }
-                cout << "Place horizontally or vertically? Enter v/h: ";
-                cin >> orientation;
-                while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v' )
-                {
-                    cout << "Place horizontally or vertically? Enter v/h: ";
-                    cin >> orientation;
-                }
-            }
-        }
-        while (occ > 0);
-
-        if (orientation == 'h' || orientation == 'H')
-        {
-            for (int i = 0 ; i < 10 ; i++)
-            {
-                for (int j = 0 ; j <10 ; j++)
-                {
-                    if (game[i][j] == startCoor)
-                    {
-                        for (int k = 0 ; k < 5 ; k++)
-                        {
-                            game[i][j+k] = "A";
-
-                        }
-                    }
-                }
-            }
-        }
-        //aircraft carrier input
-
-        else if (orientation == 'v' || orientation == 'V')
-        {
-            for (int i = 0 ; i < 10 ; i++)
-            {
-                for (int j = 0 ; j <10 ; j++)
-                {
-                    if (game[i][j] == startCoor)
-                    {
-                        for (int k = 0 ; k < 5 ; k++)
-                            game[i+k][j] = "A";
-                    }
-                }
-            }
-        }
-        print(game);
-        //battleship input
-        cout <<"\n\nWhere will you place the Battleship? \nEnter starting coordinate:";
-        cin >> startCoor;
-        while (check(game, startCoor) == -1)
-        {
-            cout << "\nIncorrect coordinate (or the space may be occupied), try again: ";
-            cin >> startCoor;
-        }
-        cout << "Place horizontally or vertically? Enter v/h: ";
-        cin >> orientation;
-        while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v' )
-        {
-            cout << "Place horizontally or vertically? Enter v/h: ";
-            cin >> orientation;
-        }
-
-        do{
-            occ = 0;
-            if (orientation == 'h' || orientation == 'H')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 4 ; k++)
-                                if (j+3 > 9)
-                                {
-                                    occ++;
-                                    break;
-                                }
-                                else if (game[i][j+k].length () == 1)
-                                    occ++;
-                        }
-                    }
-                }
-            }
-
-            else if (orientation == 'v' || orientation == 'V')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 4 ; k++)
-                            {
-                                if (i+3 > 9)
-                                {
-                                    occ++;
-                                    break;
-                                }
-                                else if (game[i+k][j].length () == 1)
-                                    occ++;
-                            }
-                        }
-                    }
-                }
-            }
-            if (occ > 0)
-            {
-                cout << "\nOut of Range, or path may be occupied";
-                cout << "\nEnter different starting coordinate:";
-                cin >> startCoor;
-                while (check(game, startCoor) == -1)
-                {
-                    cout << "\nIncorrect coordinate (or the space may be occupied), try again: ";
-                    cin >> startCoor;
-                }
-                cout << "Place horizontally or vertically? Enter v/h: ";
-                cin >> orientation;
-                while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v' )
-                {
-                    cout << "Place horizontally or vertically? Enter v/h: ";
-                    cin >> orientation;
-                }
-            }
-        }
-        while (occ > 0);
-
-        if (orientation == 'v' || orientation == 'V')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 4 ; k++)
-                                game[i+k][j] = "B";
-
-                        }
-                    }
-                }
-            }
-        else if (orientation == 'h' || orientation == 'H')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 4 ; k++)
-                                game[i][j+k] = "B";
-
-                        }
-                    }
-                }
-            }
-            print(game);
-        //submarine input
-        cout <<"\n\nWhere will you place the Submarine? \nEnter starting coordinate:";
-        cin >> startCoor;
-        while (check(game, startCoor) == -1)
-        {
-            cout << "\nIncorrect coordinate (or the space may be occupied), try again: ";
-            cin >> startCoor;
-        }
-        cout << "Place horizontally or vertically? Enter v/h: ";
-        cin >> orientation;
-        while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v' )
-        {
-            cout << "Place horizontally or vertically? Enter v/h: ";
-            cin >> orientation;
-        }
-
-        do {occ = 0;
-            if (orientation == 'h' || orientation == 'H')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 3 ; k++)
-                                if (j+2 > 9)
-                                {
-                                    occ++;
-                                    break;
-                                }
-                                else if (game[i][j+k].length () == 1)
-                                    occ++;
-                        }
-                    }
-                }
-            }
-
-            else if (orientation == 'v' || orientation == 'V')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 3 ; k++)
-                                if (i+2 > 9)
-                                {
-                                    occ++;
-                                    break;
-                                }
-                                else if (game[i+k][j].length () == 1)
-                                    occ++;
-                        }
-                    }
-                }
-            }
-            if (occ > 0)
-            {
-                cout << "\nOut of range, or path is occupied";
-                cout << "\nEnter different starting coordinate:";
-                cin >> startCoor;
-                while (check(game, startCoor) == -1)
-                {
-                    cout << "\nIncorrect coordinate (or the space may be occupied), try again: ";
-                    cin >> startCoor;
-                }
-                cout << "Place horizontally or vertically? Enter v/h: ";
-                cin >> orientation;
-                while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v' )
-                {
-                    cout << "Place horizontally or vertically? Enter v/h: ";
-                    cin >> orientation;
-                }
-            }
-        }
-        while (occ > 0 );
-
-        if (orientation == 'v' || orientation == 'V')
-        {
-            for (int i = 0 ; i < 10 ; i++)
-            {
-                for (int j = 0 ; j <10 ; j++)
-                {
-                    if (game[i][j] == startCoor)
-                    {
-                        for (int k = 0 ; k < 3 ; k++)
-                            game[i+k][j] = "S";
-                    }
-                }
-            }
-        }
-        else if (orientation == 'h' || orientation == 'H')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 3 ; k++)
-                                game[i][j+k] = "S";
-                        }
-                    }
-                }
-            }
-            print(game);
-        //CRUISER INPUT
-        cout <<"\n\nWhere will you place the Cruiser? \nEnter starting coordinate:";
-        cin >> startCoor;
-        while (check(game, startCoor) == -1)
-        {
-            cout << "\nIncorrect coordinate (or the space may be occupied), try again: ";
-            cin >> startCoor;
-        }
-        cout << "Place horizontally or vertically? Enter v/h: ";
-        cin >> orientation;
-        while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v' )
-        {
-            cout << "Place horizontally or vertically? Enter v/h: ";
-            cin >> orientation;
-        }
-
-        do {occ = 0;
-            if (orientation == 'h' || orientation == 'H')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 3 ; k++)
-                                if (j+2 > 9)
-                                {
-                                    occ++;
-                                    break;
-                                }
-                                else if (game[i][j+k].length () == 1)
-                                    occ++;
-                        }
-                    }
-                }
-            }
-
-            else if (orientation == 'v' || orientation == 'V')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 3 ; k++)
-                                if (i+2 > 9)
-                                {
-                                    occ++;
-                                    break;
-                                }
-                                else if (game[i+k][j].length () == 1)
-                                    occ++;
-                        }
-                    }
-                }
-            }
-            if (occ > 0)
-            {
-                cout << "\nOut of range, or path is occupied";
-                cout << "\nEnter different starting coordinate:";
-                cin >> startCoor;
-                while (check(game, startCoor) == -1)
-                {
-                    cout << "\nIncorrect coordinate (or the space may be occupied), try again: ";
-                    cin >> startCoor;
-                }
-                cout << "Place horizontally or vertically? Enter v/h: ";
-                cin >> orientation;
-                while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v' )
-                {
-                    cout << "Place horizontally or vertically? Enter v/h: ";
-                    cin >> orientation;
-                }
-            }
-        }
-        while (occ > 0);
-
-        if (orientation == 'v' || orientation == 'V')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 3 ; k++)
-                                game[i+k][j] = "C";
-                        }
-                    }
-                }
-            }
-            else if (orientation == 'h' || orientation == 'H')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 3 ; k++)
-                                game[i][j+k] = "C";
-
-                        }
-                    }
-                }
-            }
-        print(game);
-        //DESTROYER INPUT
-        cout <<"\n\nWhere will you place the Destroyer? \nEnter starting coordinate:";
-        cin >> startCoor;
-        while (check(game, startCoor) == -1)
-        {
-            cout << "\nIncorrect coordinate (or the space may be occupied), try again: ";
-            cin >> startCoor;
-        }
-        cout << "Place horizontally or vertically? Enter v/h: ";
-        cin >> orientation;
-        while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v' )
-        {
-            cout << "Place horizontally or vertically? Enter v/h: ";
-            cin >> orientation;
-        }
-
-        do {occ = 0;
-            if (orientation == 'h' || orientation == 'H')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 2 ; k++)
-                                if (j+1 > 9)
-                                {
-                                    occ++;
-                                    break;
-                                }
-                                else if (game[i][j+k].length () == 1)
-                                    occ++;
-                        }
-                    }
-                }
-            }
-
-            else if (orientation == 'v' || orientation == 'V')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 2 ; k++)
-                                if (i+1 > 9)
-                                {
-                                    occ++;
-                                    break;
-                                }
-                                else if (game[i+k][j].length () == 1)
-                                    occ++;
-                        }
-                    }
-                }
-            }
-            if (occ > 0)
-            {
-                cout << "\nOut of Range, or path is occupied";
-                cout << "\nEnter different starting coordinate:";
-                cin >> startCoor;
-                while (check(game, startCoor) == -1)
-                {
-                    cout << "\nIncorrect coordinate (or the space may be occupied), try again: ";
-                    cin >> startCoor;
-                }
-                cout << "Place horizontally or vertically? Enter v/h: ";
-                cin >> orientation;
-                while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v' )
-                {
-                    cout << "Place horizontally or vertically? Enter v/h: ";
-                    cin >> orientation;
-                }
-            }
-        }
-        while (occ > 0);
-
-        z = 0;
-        do{
-
-            if (orientation == 'h' || orientation == 'H')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j < 10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            z = j;
-                            if (z+1 > 9)
-                            {
-                                cout << "Invalid\nPick a different position: ";
-                                cin >> startCoor;
-                                while (check(game, startCoor) == -1)
-                                {
-                                    cout << "\nIncorrect coordinate (or the space may be occupied), try again: ";
-                                    cin >> startCoor;
-                                }
-                                cout << "\nPlace horizontally or vertically? Enter v/h: ";
-                                cin >> orientation;
-                                while (orientation != 'h' && orientation != 'H' && orientation != 'V' && orientation != 'v' )
-                                {
-                                    cout << "Place horizontally or vertically? Enter v/h: ";
-                                    cin >> orientation;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-        }
-        while (z+1 > 9 && (orientation == 'h' || orientation == 'H'));
-
-        if (orientation == 'v' || orientation == 'V')
-        {
-            for (int i = 0 ; i < 10 ; i++)
-            {
-                for (int j = 0 ; j <10 ; j++)
-                {
-                    if (game[i][j] == startCoor)
-                    {
-                        for (int k = 0 ; k < 2 ; k++)
-                            game[i+k][j] = "D";
-                    }
-                }
-            }
-        }
-        else if (orientation == 'h' || orientation == 'H')
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0 ; j <10 ; j++)
-                    {
-                        if (game[i][j] == startCoor)
-                        {
-                            for (int k = 0 ; k < 2 ; k++)
-                                game[i][j+k] = "D";
-                        }
-                    }
-                }
-            }
-        print(game);
-        cout << "\nIf you want to rearrange your ships, press 'r', or press any letter to continue\n";
-        cin >> redo;
-
-    if (redo != 'r' && redo != 'R')
-    {
-    // CPU ship placement
-    string CPU[10][10] = {{"A1","A2","A3","A4","A5","A6","A7","A8","A9","A10"},
-                            {"B1","B2","B3","B4","B5","B6","B7","B8","B9","B10"},
-                            {"C1","C2","C3","C4","C5","C6","C7","C8","C9","C10"},
-                            {"D1","D2","D3","D4","D5","D6","D7","D8","D9","D10"},
-                            {"E1","E2","E3","E4","E5","E6","E7","E8","E9","E10"},
-                            {"F1","F2","F3","F4","F5","F6","F7","F8","F9","F10"},
-                            {"G1","G2","G3","G4","G5","G6","G7","G8","G9","G10"},
-                            {"H1","H2","H3","H4","H5","H6","H7","H8","H9","H10"},
-                            {"I1","I2","I3","I4","I5","I6","I7","I8","I9","I10"},
-                            {"J1","J2","J3","J4","J5","J6","J7","J8","J9","J10"}};
-    srand(time(NULL));
-    //aircraft carrier placement
-    int oriCPU,rowCPU, colCPU;
-    oriCPU = rand() % 2;
-    // 0 is horizontal, 1 is vertical
-    int xyz = 0, counter;
-
-    if (oriCPU == 0)
-    {
-        do
-        {
-            rowCPU = rand() % 10;
-            colCPU = rand() % 10;
-            for (int i = 0 ; i <=4 ; i++)
-                if (colCPU+4 < 10)
-                    CPU[rowCPU][colCPU+i] = "A";
-        }
-        while (colCPU + 4 > 9);
-    }
-    else if (oriCPU == 1)
-    {
-        do
-        {
-            rowCPU = rand() % 10;
-            colCPU = rand() % 10;
-            for (int i = 0 ; i <=4 ; i++)
-                if (rowCPU+4 < 10)
-                    CPU[rowCPU+i][colCPU] = "A";
-        }
-        while (rowCPU + 4 > 9);
-    }
-
-    //battleship placment
-
-    oriCPU = rand() % 2;
-
-    if (oriCPU == 0)
-    {
-        do
-        {
-            rowCPU = rand() % 10;
-            colCPU = rand() % 10;
-
-            xyz = 0;
-            counter = 0;
-
-                if (colCPU + 3 < 10 && CPU[rowCPU][colCPU+1].length () != 1 && CPU[rowCPU][colCPU+2].length () != 1&& CPU[rowCPU][colCPU+3].length () != 1&& CPU[rowCPU][colCPU].length () != 1)
-                {
-                    CPU[rowCPU][colCPU] = "B";
-                    CPU[rowCPU][colCPU+1] = "B";
-                    CPU[rowCPU][colCPU+2] = "B";
-                    CPU[rowCPU][colCPU+3] = "B";
-                }
-                else
-                    xyz++;
-
-
-            for (int i = 0 ; i < 10 ; i++)
-                for (int j = 0; j < 10 ; j++)
-                    if (CPU[i][j] == "B")
-                        counter++;
-        }
-        while (colCPU + 3 > 9 || xyz > 0|| counter > 4);
-    }
-    else if (oriCPU == 1)
-    {
-        do
-        {
-            rowCPU = rand() % 10;
-            colCPU = rand() % 10;
-             xyz = 0;
-             counter = 0;
-
-                if (rowCPU + 3 < 10 && CPU[rowCPU+1][colCPU].length () != 1 && CPU[rowCPU+2][colCPU].length () != 1&& CPU[rowCPU+3][colCPU].length () != 1&& CPU[rowCPU][colCPU].length () != 1)
-                {
-                    CPU[rowCPU+1][colCPU] = "B";
-                    CPU[rowCPU+2][colCPU] = "B";
-                    CPU[rowCPU+3][colCPU] = "B";
-                    CPU[rowCPU][colCPU] = "B";
-                }
-                else
-                    xyz++;
-
-            for (int i = 0 ; i < 10 ; i++)
-                for (int j = 0; j < 10 ; j++)
-                    if (CPU[i][j] == "B")
-                        counter++;
-        }
-        while (rowCPU + 3 > 9 || xyz > 0 || counter > 4);
-    }
-
-    //submarine placement
-    oriCPU = rand() % 2;
-
-    if (oriCPU == 0)
-    {
-        do
-        {
-            rowCPU = rand() % 10;
-            colCPU = rand() % 10;
-
-            xyz = 0;
-            counter = 0;
-
-                if (colCPU + 2 < 10 && CPU[rowCPU][colCPU+1].length () != 1 && CPU[rowCPU][colCPU+2].length () != 1&& CPU[rowCPU][colCPU].length () != 1)
-                {
-                    CPU[rowCPU][colCPU] = "S";
-                    CPU[rowCPU][colCPU+1] = "S";
-                    CPU[rowCPU][colCPU+2] = "S";
-                }
-                else
-                    xyz++;
-
-
-            for (int i = 0 ; i < 10 ; i++)
-                for (int j = 0; j < 10 ; j++)
-                    if (CPU[i][j] == "S")
-                        counter++;
-        }
-        while (colCPU + 2 > 9 || xyz > 0|| counter > 3);
-    }
-    else if (oriCPU == 1)
-    {
-        do
-        {
-            rowCPU = rand() % 10;
-            colCPU = rand() % 10;
-             xyz = 0;
-             counter = 0;
-
-                if (rowCPU + 2 < 10 && CPU[rowCPU+1][colCPU].length () != 1 && CPU[rowCPU+2][colCPU].length () != 1&& CPU[rowCPU][colCPU].length () != 1)
-                {
-                    CPU[rowCPU+1][colCPU] = "S";
-                    CPU[rowCPU+2][colCPU] = "S";
-                    CPU[rowCPU][colCPU] = "S";
-                }
-                else
-                    xyz++;
-
-            for (int i = 0 ; i < 10 ; i++)
-                for (int j = 0; j < 10 ; j++)
-                    if (CPU[i][j] == "S")
-                        counter++;
-        }
-        while (rowCPU + 2 > 9 || xyz > 0 || counter > 3);
-    }
-
-    //cruiser placement
-    oriCPU = rand() % 2;
-
-    if (oriCPU == 0)
-    {
-        do
-        {
-            rowCPU = rand() % 10;
-            colCPU = rand() % 10;
-
-            xyz = 0;
-            counter = 0;
-
-                if (colCPU + 2 < 10 && CPU[rowCPU][colCPU+1].length () != 1 && CPU[rowCPU][colCPU+2].length () != 1&& CPU[rowCPU][colCPU].length () != 1)
-                {
-                    CPU[rowCPU][colCPU] = "C";
-                    CPU[rowCPU][colCPU+1] = "C";
-                    CPU[rowCPU][colCPU+2] = "C";
-                }
-                else
-                    xyz++;
-
-
-            for (int i = 0 ; i < 10 ; i++)
-                for (int j = 0; j < 10 ; j++)
-                    if (CPU[i][j] == "C")
-                        counter++;
-        }
-        while (colCPU + 2 > 9 || xyz > 0|| counter > 3);
-    }
-    else if (oriCPU == 1)
-    {
-        do
-        {
-            rowCPU = rand() % 10;
-            colCPU = rand() % 10;
-             xyz = 0;
-             counter = 0;
-
-                if (rowCPU + 2 < 10 && CPU[rowCPU+1][colCPU].length () != 1 && CPU[rowCPU+2][colCPU].length () != 1&& CPU[rowCPU][colCPU].length () != 1)
-                {
-                    CPU[rowCPU+1][colCPU] = "C";
-                    CPU[rowCPU+2][colCPU] = "C";
-                    CPU[rowCPU][colCPU] = "C";
-                }
-                else
-                    xyz++;
-
-            for (int i = 0 ; i < 10 ; i++)
-                for (int j = 0; j < 10 ; j++)
-                    if (CPU[i][j] == "C")
-                        counter++;
-        }
-        while (rowCPU + 2 > 9 || xyz > 0 || counter > 3);
-    }
-
-    //destroyer placement
-    oriCPU = rand() % 2;
-
-    if (oriCPU == 0)
-    {
-        do
-        {
-            rowCPU = rand() % 10;
-            colCPU = rand() % 10;
-
-            xyz = 0;
-            counter = 0;
-
-                if (colCPU + 1 < 10 && CPU[rowCPU][colCPU+1].length () != 1 && CPU[rowCPU][colCPU].length () != 1)
-                {
-                    CPU[rowCPU][colCPU] = "D";
-                    CPU[rowCPU][colCPU+1] = "D";
-                }
-                else
-                    xyz++;
-
-
-            for (int i = 0 ; i < 10 ; i++)
-                for (int j = 0; j < 10 ; j++)
-                    if (CPU[i][j] == "D")
-                        counter++;
-        }
-        while (colCPU + 1 > 9 || xyz > 0|| counter > 2);
-    }
-    else if (oriCPU == 1)
-    {
-        do
-        {
-            rowCPU = rand() % 10;
-            colCPU = rand() % 10;
-             xyz = 0;
-             counter = 0;
-
-                if (rowCPU + 1 < 10 && CPU[rowCPU+1][colCPU].length () != 1 && CPU[rowCPU][colCPU].length () != 1)
-                {
-                    CPU[rowCPU+1][colCPU] = "D";
-                    CPU[rowCPU][colCPU] = "D";
-                }
-                else
-                    xyz++;
-
-            for (int i = 0 ; i < 10 ; i++)
-                for (int j = 0; j < 10 ; j++)
-                    if (CPU[i][j] == "D")
-                        counter++;
-        }
-        while (rowCPU + 1 > 9 || xyz > 0 || counter > 2);
-    }
-
-    //let the player make guesses
-    system("cls");
-    string a;
-    string temp = " ";
-    cout << "\t\t\t    LET THE GAME BEGIN\n\n";
-    print(player);
-    int totalPlayer,totalCPU, heat = 0, totA = 0, totB = 0, totC = 0, totD = 0, totS = 0, cpuA = 0, cpuB = 0, cpuC = 0, cpuD = 0, cpuS = 0;
-    do
-    {
-        //player's turn
-        a = guess(player,CPU);
-            for (int i = 0 ; i < 10 ; i++)
-                for (int j = 0 ; j <10 ; j++)
-                    if (player[i][j] == a)
-                    {
-                        if (CPU[i][j].length () == 1)
-                        {
-                            cout << "\nHit!";
-                            player[i][j] = " X";
-                            CPU[i][j] = "X";
-                            if (totA == 0)
-                                totA = countA(CPU);
-                            if (totB == 0)
-                                totB = countB(CPU);
-                            if (totC == 0)
-                                totC = countC(CPU);
-                            if (totD == 0)
-                                totD = countD(CPU);
-                            if (totS == 0)
-                                totS = countS(CPU);
-                            totalPlayer = keepCountPlayer(CPU);
-                        }
-                        else
-                        {
-                            cout << "\nMiss!";
-                            player[i][j] = " O";
-                            totalPlayer = keepCountPlayer(CPU);
-                        }
-                    }
-        Sleep(100);
-        //CPU's turn
-
-        int r,c;
-        if (totalPlayer != 0)
-        {
-            cout <<"\nCPU's Target: ";
-            if (heat == 0)
-            {
-                r = rand() % 10;
-                c = rand() % 10;
-                while (game[r][c] == " O" || game [r][c] == " X")
-                {
-                    r = rand() % 10;
-                    c = rand() % 10;
-                }
-            }
-            if (heat > 0)
-            {
-                for (int i = 0 ; i < 10 ; i++)
-                {
-                    for (int j = 0; j < 10 ; j++)
-                    {
-                        if (game[i][j] == temp)
-                        {
-                            r = i;
-                            c = j;
-                            j=9;
-                            i=9;
-                        }
-                        else
-                        {
-                            r = rand() % 10;
-                            c = rand() % 10;
-                            while (game[r][c] == " O" || game [r][c] == " X")
-                            {
-                                r = rand() % 10;
-                                c = rand() % 10;
-                            }
-                            heat = 0;
-                        }
-                    }
-                }
-            }
-
-            if (r == 0)
-                cout << "A" << c+1;
-            else if (r == 1)
-                cout << "B" << c+1;
-            else if (r == 2)
-                cout << "C" << c+1;
-            else if (r == 3)
-                cout << "D" << c+1;
-            else if (r == 4)
-                cout << "E" << c+1;
-            else if (r == 5)
-                cout << "F" << c+1;
-            else if (r == 6)
-                cout << "G" << c+1;
-            else if (r == 7)
-                cout << "H" << c+1;
-            else if (r == 8)
-                cout << "I" << c+1;
-            else if (r == 9)
-                cout << "J" << c+1;
-            Sleep(1000);
-            if (game[r][c].length () == 1)
-            {
-                cout << "\nHit!\n";
-                Sleep(100);
-                temp = game[r][c];
-
-                game[r][c] = " X";
-                print(game);
-                 heat++;
-
-                if (cpuA == 0)
-                    cpuA = countA(game);
-                if (cpuB == 0)
-                    cpuB = countB(game);
-                if (cpuC == 0)
-                    cpuC = countC(game);
-                if (cpuD == 0)
-                    cpuD = countD(game);
-                if (cpuS == 0)
-                    cpuS = countS(game);
-                totalCPU = keepCountCpu(game);
-                cout << "\npress any key to continue...";
-                getch();
-
-            }
-            else
-            {
-                cout << "\nMiss!\n";
-                Sleep(100);
-                game[r][c] = " O";
-                print(game);
-
-                cout << "\npress any key to continue...";
-                getch();
-                totalCPU = keepCountCpu(game);
-            }
-
-        }
-
-        if (totalCPU != 0 && totalPlayer != 0)
-        {
-            system("cls");
-            print(player);
-        }
-    }
-    while (totalPlayer != 0 && totalCPU != 0);
-    }
-    }
-    while (redo == 'r' || redo == 'R');
-
-    getch ();
-    return 0;
+// reset board
+void restore (string grid[10][10]){
+	for (int i = 0 ; i < 10 ; i++){
+		for (int j = 0 ; j < 10 ; j++){	
+			char lett = i+65;
+			string letter(1,lett);
+			grid[i][j] = letter+to_string(j+1);
+		}
+	} 
 }
 
-string guess (string player[10][10], string a[10][10])
+// get user coordinates
+string getCoor()
 {
+	string startCoor = "";
+	char charOne,charTwo,charThree;
+	
+	charOne = getch();
+	cout << charOne;
+	charTwo = getch();
+	cout << charTwo;
+	charThree = getch();
+	if (int(charThree) > 47)
+	{
+		cout << charThree;
+		getch();
+	}
+	
+	if(int(charOne) > 96)
+		startCoor.push_back(char(charOne-32));
+	else
+		startCoor.push_back(char(charOne));
+	startCoor.push_back(charTwo);
+	startCoor.push_back(charThree);
+	
+	if (int(charThree) < 48)
+		startCoor.pop_back();
+	if (int(charOne) == 3 || int(charTwo) == 3 || int(charThree) == 3)
+		exit(EXIT_FAILURE);
+
+	return startCoor;
+}
+
+// ensure valid input from user
+string guess (string player[10][10], string grid[10][10]){
     string target;
-    int here;
+    bool here;
 
     do
     {
         cout << "\nChoose a valid target: ";
-        cin >> target;
-        if (target == "!")
-            print(a);
-        here = 0;
+        target = getCoor();
+		// cin >> target;
+        if (target == "!!")
+		{
+			cout << endl;
+            print(grid);
+		}
+        here = false;
         for (int i = 0 ; i < 10 ; i++)
             for (int j = 0 ; j <10 ; j++)
                 if (player[i][j] == target)
-                here++;
+					here = true;
     }
-    while (here == 0);
+    while (!here);
     return target;
 }
 
-int check (string a[10][10], string x)
-{
-    int temp = -1;
+// check if string is in board
+bool check (string grid[10][10], string x){
+    bool temp = false;
     for (int i = 0 ; i < 10 ; i++)
-    {
         for (int j = 0 ; j < 10 ; j++)
-        {
-            if (a[i][j] == x && a[i][j].length () > 1){
-                temp++;
-                break;
-            }
-        }
-    }
+            if (grid[i][j] == x && grid[i][j].length () > 1)
+                temp = true;
+	
     return temp;
 }
 
-int countA (string a[10][10])
-{
-    int num = 0;
-    for (int i  = 0 ; i < 10 ; i++)
-        for (int j = 0; j <10 ; j++)
-            if (a[i][j] == "A")
-                num++;
-    if (num == 0)
-    {
-        cout << "\nACHEIVEMENT: Aircraft Carrier has been sunk!";
-        num = 100;
-        return num;
-    }
-    else
-        return 0;
+// generate random coordinate for cpu 
+void randomCoor(string grid[10][10], int &r, int &c){
+	srand(time(NULL));
+	do
+	{
+		r = rand() % 10;
+		c = rand() % 10;
+	}
+	while (grid[r][c] == " O" || grid [r][c] == " X");
 }
 
-int countB (string a[10][10])
-{
-    int num = 0;
-    for (int i  = 0 ; i < 10 ; i++)
-        for (int j = 0; j <10 ; j++)
-            if (a[i][j] == "B")
-                num++;
-    if (num == 0)
-    {
-        cout << "\nACHEIVEMENT: Battleship has been sunk!";
-        num = 100;
-        return num;
-    }
-    else
-        return 0;
+// determine if ship has been sunk
+void count(string CPU[10][10], Ship * ShipToCount){
+	int num = 0;
+	// bool flag = true;
+	for (int i = 0 ; i < 10 ; i++)
+		for (int j = 0; j <10 ; j++)
+			if (CPU[i][j] == ShipToCount->getLetter() && !ShipToCount->isSunk())
+				num++;
+		
+	ShipToCount->hit(ShipToCount->getSpaces()-num);
+	if(ShipToCount->getSpaces() == ShipToCount->getHits() && !ShipToCount->isSunk())
+	{
+		ShipToCount->sink();
+		cout << "\nACHEIVEMENT: " << ShipToCount->getName() << " has been sunk!";
+	}
 }
 
-int countC (string a[10][10])
-{
-    int num = 0;
-    for (int i  = 0 ; i < 10 ; i++)
-        for (int j = 0; j <10 ; j++)
-            if (a[i][j] == "C")
-                num++;
-    if (num == 0)
-    {
-        cout << "\nACHEIVEMENT: Cruiser has been sunk!";
-        num = 100;
-        return num;
-    }
-    else
-        return 0;
-}
-
-int countD (string a[10][10])
-{
-    int num = 0;
-    for (int i  = 0 ; i < 10 ; i++)
-        for (int j = 0; j <10 ; j++)
-            if (a[i][j] == "D")
-                num++;
-    if (num == 0)
-    {
-        cout << "\nACHEIVEMENT: Destroyer has been sunk!";
-        num = 100;
-        return num;
-    }
-    else
-        return 0;
-}
-
-int countS (string a[10][10])
-{
-    int num = 0;
-    for (int i  = 0 ; i < 10 ; i++)
-        for (int j = 0; j <10 ; j++)
-            if (a[i][j] == "S")
-                num++;
-    if (num == 0)
-    {
-        cout << "\nACHEIVEMENT: Submarine has been sunk!";
-        num = 100;
-        return num;
-    }
-    else
-        return 0;
-}
-
-
-int keepCountPlayer (string a[10][10])
-{
+// check if there is a winner
+int winCondition (string grid[10][10], int person){
     int countA = 0, countB = 0, countC = 0, countD = 0, countS = 0;
     for (int i = 0 ; i < 10 ; i++)
     {
         for (int j = 0 ; j <10 ; j++)
         {
-            if (a[i][j] == "A")
-                countA++;
-            else if (a[i][j] == "B")
-                countB++;
-            else if (a[i][j] == "C")
-                countC++;
-            else if (a[i][j] == "D")
-                countD++;
-            else if (a[i][j] == "S")
-                countS++;
+            if (grid[i][j] == "A")			countA++;
+            else if (grid[i][j] == "B")		countB++;
+            else if (grid[i][j] == "C")		countC++;
+            else if (grid[i][j] == "D")		countD++;
+            else if (grid[i][j] == "S")		countS++;
         }
     }
     int total = countA+countB+countC+countD+countS;
     if (total == 0)
-        cout << "\n\nYOU WIN!";
+	{
+		if (person == 1)	cout << "\n\nYOU WIN!";
+		else cout << "\n\nYOU LOSE!";
+	}
     Sleep(500);
     return total;
 }
-
-int keepCountCpu (string a[10][10])
-{
-    int countA = 0, countB = 0, countC = 0, countD = 0, countS = 0;
-    for (int i = 0 ; i < 10 ; i++)
-    {
-        for (int j = 0 ; j <10 ; j++)
-        {
-            if (a[i][j] == "A")
-                countA++;
-            else if (a[i][j] == "B")
-                countB++;
-            else if (a[i][j] == "C")
-                countC++;
-            else if (a[i][j] == "D")
-                countD++;
-            else if (a[i][j] == "S")
-                countS++;
-        }
-    }
-    int total = countA+countB+countC+countD+countS;
-    if (total == 0)
-        cout << "\n\nYOU LOSE!";
-    Sleep(500);
-    return total;
-}
-
